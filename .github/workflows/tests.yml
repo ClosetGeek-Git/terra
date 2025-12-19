@@ -1,0 +1,56 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        php-version: ['7.4', '8.0', '8.1', '8.2']
+    
+    name: PHP ${{ matrix.php-version }} Test
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: zmq, json
+        coverage: xdebug
+    
+    - name: Validate composer.json
+      run: composer validate --strict
+    
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-${{ matrix.php-version }}-
+    
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+    
+    - name: Check PHP syntax
+      run: find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \;
+    
+    - name: Run unit tests
+      run: vendor/bin/phpunit --testsuite Unit --coverage-text
+    
+    # Note: Integration tests require Janus Gateway to be running
+    # Uncomment when Janus is available in CI environment
+    # - name: Run integration tests
+    #   run: vendor/bin/phpunit --testsuite Integration
+    #   env:
+    #     JANUS_ADMIN_ADDRESS: tcp://localhost:7889
+    #     JANUS_ADMIN_SECRET: janusoverlord
