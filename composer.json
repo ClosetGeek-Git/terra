@@ -1,0 +1,32 @@
+{
+    "name": "closetgeek-git/terra",
+    "description": "High-level Janus Admin Framework over ZeroMQ with ReactPHP",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "ClosetGeek",
+            "email": "info@closetgeek.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "react/zmq": "^0.4.0",
+        "react/event-loop": "^1.2",
+        "monolog/monolog": "^2.0",
+        "ext-zmq": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Terra\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Terra\\Tests\\": "tests/"
+        }
+    }
+}
