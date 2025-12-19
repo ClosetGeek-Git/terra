@@ -1,4 +1,4 @@
-"Terra - Proof of concept of Janus Admin Framework over ZeroMQ, not yet guaranteed to work!
+Terra - Proof of concept of Janus Admin Framework over ZeroMQ, not yet guaranteed to work!
 
 Terra is a high-level PHP framework for interacting with Janus Gateway's Admin API over ZeroMQ. Built with ReactPHP, it provides asynchronous, event-driven communication with Janus Gateway, making it easy to manage sessions, plugins, and real-time events.
 
