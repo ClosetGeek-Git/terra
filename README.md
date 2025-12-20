@@ -447,7 +447,29 @@ $client->connect()->then(
 
 ## Testing
 
-Terra includes comprehensive integration tests for all transport options.
+Terra includes comprehensive integration tests for all transport options and admin features.
+
+### Comprehensive Admin Test Suite
+
+The admin test suite provides complete coverage of all high-level admin features:
+
+```bash
+# Run complete admin test suite
+./run-admin-tests.sh
+
+# Run with verbose output
+./run-admin-tests.sh --verbose
+
+# Run only integration tests
+./run-admin-tests.sh --integration-only
+```
+
+The admin test suite includes:
+- **Admin Client Tests**: Server info, session management, log levels, event handling
+- **VideoRoom Plugin Tests**: Room management, participants, recording, forwarders
+- **Streaming Plugin Tests**: Mountpoint management, recording, configuration
+- **Other Plugin Tests**: VideoCall, EchoTest, RecordPlay features
+- **Transport Tests**: HTTP, UnixSocket, and ZeroMQ validation
 
 ### Automated Setup and Testing
 
@@ -457,11 +479,14 @@ Use the provided scripts for quick setup and testing:
 # 1. Install and configure Janus Gateway
 sudo ./setup-janus.sh
 
-# 2. Run integration tests
+# 2. Run all integration tests
 ./run-integration-tests.sh
+
+# 3. Run admin-specific tests
+./run-admin-tests.sh
 ```
 
-The test runner will:
+The test runners will:
 - Check all prerequisites
 - Verify transport availability
 - Run tests for HTTP, UnixSocket, and ZMQ (if available)
@@ -469,17 +494,32 @@ The test runner will:
 
 ### Manual Testing
 
-You can also test individual transports:
+You can also test individual components:
 
 ```bash
 # Unit tests
 vendor/bin/phpunit --testsuite Unit
 
-# Integration tests (requires running Janus)
+# All integration tests
+vendor/bin/phpunit --testsuite Integration
+
+# Specific test suites
+vendor/bin/phpunit tests/Integration/AdminClientTest.php
+vendor/bin/phpunit tests/Integration/VideoRoomAdminTest.php
+vendor/bin/phpunit tests/Integration/StreamingAdminTest.php
+vendor/bin/phpunit tests/Integration/PluginAdminTest.php
+
+# Transport-specific tests
 vendor/bin/phpunit --testsuite Integration --filter HttpTransportTest
 vendor/bin/phpunit --testsuite Integration --filter UnixSocketTransportTest
 vendor/bin/phpunit --testsuite Integration --filter ZmqTransportTest
 ```
+
+### Test Documentation
+
+Detailed documentation for tests is available in:
+- `tests/Integration/README.md` - Comprehensive test suite documentation
+- Includes troubleshooting guides, environment setup, and usage examples
 
 ### Test Environment Variables
 
