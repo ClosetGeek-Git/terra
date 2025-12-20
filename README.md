@@ -300,25 +300,38 @@ $client->connect()->then(
 
 ## Testing
 
-Terra includes example scripts that can be used for testing. To test with a real Janus instance:
+Terra includes a comprehensive test suite covering all admin features across multiple transport types (ZeroMQ, Unix Sockets, and HTTP/REST).
 
-1. Ensure Janus Gateway is running with ZeroMQ transport enabled
-2. Configure `janus.transport.zmq.jcfg`:
-   ```
-   general: {
-       enabled = true
-       admin_base_path = "/admin"
-   }
-   admin: {
-       admin_base_path = "/admin"
-       enabled = true
-       bind = "tcp://*:7889"
-   }
-   ```
-3. Run example scripts:
-   ```bash
-   php examples/basic_usage.php
-   ```
+For detailed testing instructions, see **[TESTING.MD](TESTING.MD)**.
+
+### Quick Start
+
+```bash
+# Install dependencies
+composer install
+
+# Run unit tests
+vendor/bin/phpunit --testsuite Unit
+
+# Run integration tests (requires running Janus instance)
+vendor/bin/phpunit --testsuite Integration
+
+# Run all tests for all transports
+./run-tests.sh
+```
+
+### Test Coverage
+
+The test suite covers:
+- Core admin client functionality (connection, info, sessions, handles)
+- VideoRoom plugin (room management, participant control)
+- Streaming plugin (mountpoint administration)
+- EchoTest plugin (diagnostics)
+- VideoCall plugin (call management)
+- RecordPlay plugin (recording management)
+- All operations across ZMQ, Unix Socket, and HTTP transports
+
+For complete setup and testing instructions, see **[TESTING.MD](TESTING.MD)**.
 
 ## Janus Gateway Configuration
 
