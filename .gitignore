@@ -5,6 +5,8 @@ composer.lock
 # PHPUnit
 .phpunit.result.cache
 phpunit.xml
+/coverage/
+coverage.xml
 
 # IDE
 .idea/
@@ -22,3 +24,6 @@ Thumbs.db
 
 # Config overrides
 config/local.php
+
+# Test environment
+.env.testing

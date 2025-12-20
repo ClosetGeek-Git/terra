@@ -1,51 +1,100 @@
 # Terra Tests
 
-This directory contains tests for the Terra Janus Admin Framework.
+This directory contains the comprehensive test suite for the Terra Janus Admin Framework.
 
 ## Test Structure
 
-- `Unit/` - Unit tests for individual classes and components
-- `Integration/` - Integration tests that require a running Janus Gateway instance
+```
+tests/
+├── Unit/                          # Unit tests (no Janus required)
+│   ├── Config/
+│   │   └── ConfigManagerTest.php
+│   └── Exception/
+│       └── ExceptionTest.php
+└── Integration/                   # Integration tests (requires Janus)
+    ├── IntegrationTestBase.php    # Base class for integration tests
+    ├── AdminClientTest.php        # Core admin functionality
+    ├── VideoRoomPluginTest.php    # VideoRoom plugin tests
+    ├── StreamingPluginTest.php    # Streaming plugin tests
+    ├── EchoTestPluginTest.php     # EchoTest plugin tests
+    ├── VideoCallPluginTest.php    # VideoCall plugin tests
+    └── RecordPlayPluginTest.php   # RecordPlay plugin tests
+```
 
 ## Running Tests
 
 ### Prerequisites
 
-For unit tests:
+**For unit tests:**
 ```bash
 composer install
 ```
 
-For integration tests, you also need:
-- Janus Gateway with ZeroMQ transport enabled
-- ZMQ extension for PHP
+**For integration tests, you also need:**
+- Janus Gateway with required transports enabled (ZMQ, Unix Socket, HTTP)
+- PHP ZMQ extension
+- Running Janus instance
 
-### Running Unit Tests
+For detailed setup instructions, see **[TESTING.MD](../TESTING.MD)** in the root directory.
 
-```bash
-vendor/bin/phpunit --testsuite Unit
-```
-
-### Running Integration Tests
-
-**Note:** Integration tests require a running Janus Gateway instance.
-
-1. Start Janus Gateway with ZeroMQ transport enabled
-2. Configure test environment:
-   ```bash
-   export JANUS_ADMIN_ADDRESS="tcp://localhost:7889"
-   export JANUS_ADMIN_SECRET="janusoverlord"
-   ```
-3. Run tests:
-   ```bash
-   vendor/bin/phpunit --testsuite Integration
-   ```
-
-### Running All Tests
+### Quick Start
 
 ```bash
+# Run all tests
 vendor/bin/phpunit
+
+# Run only unit tests
+vendor/bin/phpunit --testsuite Unit
+
+# Run only integration tests
+vendor/bin/phpunit --testsuite Integration
+
+# Run tests for specific transport
+JANUS_TRANSPORT=zmq vendor/bin/phpunit --testsuite Integration
+JANUS_TRANSPORT=unix vendor/bin/phpunit --testsuite Integration
+JANUS_TRANSPORT=http vendor/bin/phpunit --testsuite Integration
+
+# Run with coverage
+vendor/bin/phpunit --coverage-html coverage
+
+# Use the test runner script
+./run-tests.sh
 ```
+
+## Test Configuration
+
+### Environment Variables
+
+Configure test environment using environment variables:
+
+**For ZeroMQ Transport:**
+```bash
+export JANUS_TRANSPORT=zmq
+export JANUS_ADMIN_ADDRESS="tcp://localhost:7889"
+export JANUS_ADMIN_SECRET="janusoverlord"
+```
+
+**For Unix Socket Transport:**
+```bash
+export JANUS_TRANSPORT=unix
+export JANUS_ADMIN_SOCKET="/tmp/janus_admin.sock"
+export JANUS_ADMIN_SECRET="janusoverlord"
+```
+
+**For HTTP/REST Transport:**
+```bash
+export JANUS_TRANSPORT=http
+export JANUS_ADMIN_HOST="localhost"
+export JANUS_ADMIN_PORT=7088
+export JANUS_ADMIN_BASE_PATH="/admin"
+export JANUS_ADMIN_SECRET="janusoverlord"
+```
+
+### Configuration Files
+
+- **phpunit.xml.dist**: Default PHPUnit configuration (do not modify)
+- **phpunit.xml**: Local PHPUnit configuration (git-ignored, copy from .dist)
+- **.env.testing.example**: Example environment configuration
 
 ## Writing Tests
 
@@ -80,8 +129,9 @@ class ConfigManagerTest extends TestCase
 
 Integration tests should:
 - Test the framework with a real Janus Gateway instance
-- Verify end-to-end functionality
+- Verify end-to-end functionality across all transports
 - Clean up resources after testing
+- Extend `IntegrationTestBase` for common functionality
 
 Example:
 ```php
@@ -89,45 +139,141 @@ Example:
 
 namespace Terra\Tests\Integration;
 
-use PHPUnit\Framework\TestCase;
-use Terra\Admin\AdminClient;
-
-class AdminClientTest extends TestCase
+class MyPluginTest extends IntegrationTestBase
 {
-    private $client;
-
     protected function setUp(): void
     {
-        $this->client = new AdminClient([
-            'janus' => [
-                'admin_address' => getenv('JANUS_ADMIN_ADDRESS'),
-                'admin_secret' => getenv('JANUS_ADMIN_SECRET'),
-            ],
-        ]);
+        parent::setUp();
+        $this->skipIfJanusNotAvailable();
     }
 
-    public function testConnection()
+    public function testSomeFeature(): void
     {
-        $connected = false;
-        $this->client->connect()->then(function () use (&$connected) {
-            $connected = true;
+        $result = $this->executePromiseTest(function () {
+            return $this->client->someMethod();
         });
-        $this->client->run();
-        $this->assertTrue($connected);
+
+        $this->assertSuccessResponse($result);
     }
 }
 ```
 
-## Coverage
+## Test Coverage
 
-Generate code coverage report:
+The test suite provides comprehensive coverage of:
 
-```bash
-vendor/bin/phpunit --coverage-html coverage
-```
+### Core Admin Features
+- Connection management (connect, disconnect)
+- Server information retrieval
+- Session management (list, info)
+- Handle management (list, info)
+- Log level management (get, set)
+- Packet capture (start, stop)
+- Error handling and edge cases
 
-View the report by opening `coverage/index.html` in a browser.
+### VideoRoom Plugin
+- Room listing
+- Room creation/destruction
+- Room configuration and editing
+- Participant management
+- Recording control
+- Codec configuration
+- Error scenarios
+
+### Streaming Plugin
+- Mountpoint listing
+- Mountpoint creation/destruction
+- Mountpoint configuration
+- Enable/disable mountpoints
+- Recording control
+- Different streaming types (RTP, etc.)
+
+### EchoTest Plugin
+- Statistics retrieval
+- Session listing
+
+### VideoCall Plugin
+- Session listing
+- User information
+- Call hangup
+
+### RecordPlay Plugin
+- Recording listing
+- Recording information
+- Recording deletion
+
+### Transport Coverage
+All features are tested across:
+- **ZeroMQ**: Asynchronous messaging transport
+- **Unix Socket**: Local IPC transport
+- **HTTP/REST**: RESTful API transport
 
 ## Continuous Integration
 
-Tests are automatically run in CI/CD pipelines. Ensure all tests pass before submitting a pull request.
+The test suite is designed for CI/CD integration. See examples in **[TESTING.MD](../TESTING.MD)**:
+- GitHub Actions
+- GitLab CI
+- Docker Compose
+
+## Troubleshooting
+
+### Tests Skipped
+
+If you see "Janus Gateway is not available", ensure:
+1. Janus is running: `ps aux | grep janus`
+2. Required transport is enabled and configured
+3. Ports/sockets are accessible
+
+### Connection Failures
+
+Check:
+- Janus configuration files
+- Firewall settings
+- Admin secret matches
+- Socket permissions (for Unix socket)
+
+### Plugin Not Available
+
+Verify:
+- Plugin is installed in Janus
+- Plugin is enabled in configuration
+- Plugin configuration file exists
+
+For detailed troubleshooting, see **[TESTING.MD](../TESTING.MD)**.
+
+## Coverage Reports
+
+Generate coverage reports:
+
+```bash
+# HTML report
+vendor/bin/phpunit --coverage-html coverage
+open coverage/index.html
+
+# Text report
+vendor/bin/phpunit --coverage-text
+
+# Clover XML (for CI)
+vendor/bin/phpunit --coverage-clover coverage.xml
+```
+
+## Contributing
+
+When adding new tests:
+1. Follow existing test structure and conventions
+2. Add both unit and integration tests where applicable
+3. Ensure tests pass for all transport types
+4. Update documentation as needed
+5. Run full test suite before submitting PR
+
+## Resources
+
+- **[TESTING.MD](../TESTING.MD)**: Complete testing guide
+- **[Janus Admin API](https://janus.conf.meetecho.com/docs/admin.html)**: Official documentation
+- **[PHPUnit Documentation](https://phpunit.de/)**: Testing framework docs
+
+## Support
+
+For issues and questions:
+- **GitHub Issues**: https://github.com/ClosetGeek-Git/terra/issues
+- **Documentation**: https://github.com/ClosetGeek-Git/terra

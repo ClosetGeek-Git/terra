@@ -22,4 +22,17 @@
             <directory suffix=".php">src</directory>
         </include>
     </coverage>
+
+    <php>
+        <!-- Default test environment variables -->
+        <env name="JANUS_TRANSPORT" value="zmq" force="false"/>
+        <env name="JANUS_ADMIN_ADDRESS" value="tcp://localhost:7889" force="false"/>
+        <env name="JANUS_ADMIN_SECRET" value="janusoverlord" force="false"/>
+        <env name="JANUS_ADMIN_SOCKET" value="/tmp/janus_admin.sock" force="false"/>
+        <env name="JANUS_ADMIN_HOST" value="localhost" force="false"/>
+        <env name="JANUS_ADMIN_PORT" value="7088" force="false"/>
+        <env name="JANUS_ADMIN_BASE_PATH" value="/admin" force="false"/>
+        <env name="JANUS_ADMIN_SECURE" value="false" force="false"/>
+        <env name="SKIP_INTEGRATION_TESTS" value="false" force="false"/>
+    </php>
 </phpunit>

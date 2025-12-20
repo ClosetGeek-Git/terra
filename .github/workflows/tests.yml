@@ -7,14 +7,13 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  test:
+  unit-tests:
+    name: Unit Tests - PHP ${{ matrix.php-version }}
     runs-on: ubuntu-latest
     
     strategy:
       matrix:
         php-version: ['7.4', '8.0', '8.1', '8.2']
-    
-    name: PHP ${{ matrix.php-version }} Test
     
     steps:
     - uses: actions/checkout@v3
@@ -23,7 +22,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php-version }}
-        extensions: zmq, json
+        extensions: zmq, json, mbstring, xml
         coverage: xdebug
     
     - name: Validate composer.json
@@ -45,12 +44,76 @@ jobs:
       run: find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \;
     
     - name: Run unit tests
-      run: vendor/bin/phpunit --testsuite Unit --coverage-text
+      run: vendor/bin/phpunit --testsuite Unit --coverage-clover coverage.xml
     
-    # Note: Integration tests require Janus Gateway to be running
-    # Uncomment when Janus is available in CI environment
-    # - name: Run integration tests
-    #   run: vendor/bin/phpunit --testsuite Integration
-    #   env:
-    #     JANUS_ADMIN_ADDRESS: tcp://localhost:7889
-    #     JANUS_ADMIN_SECRET: janusoverlord
+    - name: Upload coverage to Codecov
+      if: matrix.php-version == '7.4'
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+        flags: unit-tests
+
+  integration-tests:
+    name: Integration Tests - ${{ matrix.transport }} Transport
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        transport: ['zmq', 'http']
+    
+    services:
+      janus:
+        image: canyan/janus-gateway:latest
+        ports:
+          - 7088:7088
+          - 7889:7889
+        options: >-
+          --health-cmd="curl -f http://localhost:7088/janus/info || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '7.4'
+        extensions: zmq, json, mbstring, xml, curl
+    
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+    
+    - name: Wait for Janus
+      run: |
+        echo "Waiting for Janus Gateway to be ready..."
+        for i in {1..30}; do
+          if curl -f http://localhost:7088/janus/info 2>/dev/null; then
+            echo "✓ Janus Gateway is ready"
+            break
+          fi
+          echo "Waiting... ($i/30)"
+          sleep 2
+        done
+        curl -v http://localhost:7088/janus/info || exit 1
+    
+    - name: Run integration tests
+      env:
+        JANUS_TRANSPORT: ${{ matrix.transport }}
+        JANUS_ADMIN_ADDRESS: tcp://localhost:7889
+        JANUS_ADMIN_HOST: localhost
+        JANUS_ADMIN_PORT: 7088
+        JANUS_ADMIN_BASE_PATH: /admin
+        JANUS_ADMIN_SECRET: janusoverlord
+      run: vendor/bin/phpunit --testsuite Integration --verbose
+    
+    - name: Upload test logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: integration-logs-${{ matrix.transport }}
+        path: |
+          *.log
+          tests/**/*.log
