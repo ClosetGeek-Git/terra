@@ -7,6 +7,7 @@ use React\Promise\Promise;
 use React\Promise\Deferred;
 use Terra\Config\ConfigManager;
 use Terra\Logger\Logger;
+use Terra\Transport\Socket\SeqpacketSocket;
 use Terra\Exception\ConnectionException;
 use Terra\Exception\InvalidJsonException;
 use Terra\Exception\TimeoutException;
@@ -15,7 +16,7 @@ use Terra\Exception\TimeoutException;
  * UnixSocket Transport with SOCK_SEQPACKET support
  * 
  * Handles asynchronous communication with Janus Gateway over Unix Domain Sockets
- * Uses SOCK_SEQPACKET for reliable, sequenced packet delivery
+ * Uses SOCK_SEQPACKET for reliable, sequenced packet delivery with fallback mechanisms
  */
 class UnixSocketTransport implements TransportInterface
 {
@@ -35,7 +36,7 @@ class UnixSocketTransport implements TransportInterface
     private $logger;
 
     /**
-     * @var resource|null Unix socket resource
+     * @var SeqpacketSocket|null Unix socket instance
      */
     private $socket = null;
 
@@ -53,11 +54,6 @@ class UnixSocketTransport implements TransportInterface
      * @var array Pending requests waiting for responses
      */
     private $pendingRequests = [];
-
-    /**
-     * @var object|null Read stream
-     */
-    private $readStream = null;
 
     /**
      * @var string Buffer for incomplete messages
@@ -98,26 +94,22 @@ class UnixSocketTransport implements TransportInterface
             $socketPath = $this->config->get('janus.unix_socket_path', '/var/run/janus/janus-admin.sock');
             $this->logger->info("Connecting to Janus Gateway via UnixSocket", ['path' => $socketPath]);
 
-            // Check if socket file exists
-            if (!file_exists($socketPath)) {
-                throw new ConnectionException("Socket file does not exist: " . $socketPath);
-            }
-
-            // Create SOCK_SEQPACKET socket
-            $this->socket = $this->createSeqpacketSocket($socketPath);
+            // Create SOCK_SEQPACKET socket using our shim
+            $this->socket = SeqpacketSocket::create($socketPath, $this->loop);
             
-            if ($this->socket === false) {
-                throw new ConnectionException("Failed to create SOCK_SEQPACKET socket");
-            }
+            // Log socket information
+            $socketInfo = $this->socket->getInfo();
+            $this->logger->info("UnixSocket created", $socketInfo);
 
-            // Set non-blocking mode
-            stream_set_blocking($this->socket, false);
-
-            // Add socket to event loop for reading
-            $this->setupReadStream();
+            // Set up read handler
+            $this->socket->on('data', function ($data) {
+                $this->handleData($data);
+            });
 
             $this->connected = true;
-            $this->logger->info("Connected to Janus Gateway via UnixSocket");
+            $this->logger->info("Connected to Janus Gateway via UnixSocket", [
+                'socket_type' => $this->socket->getSocketType()
+            ]);
             $deferred->resolve(true);
 
         } catch (\Exception $e) {
@@ -129,133 +121,19 @@ class UnixSocketTransport implements TransportInterface
     }
 
     /**
-     * Create a SOCK_SEQPACKET socket
+     * Handle incoming data
      * 
-     * @param string $socketPath Path to Unix socket
-     * @return resource|false Socket resource or false on failure
-     */
-    private function createSeqpacketSocket(string $socketPath)
-    {
-        // Try to create SOCK_SEQPACKET socket using socket_create
-        if (function_exists('socket_create')) {
-            $socket = @socket_create(AF_UNIX, SOCK_SEQPACKET, 0);
-            
-            if ($socket !== false) {
-                if (@socket_connect($socket, $socketPath)) {
-                    $this->logger->debug("Created SOCK_SEQPACKET socket using socket_create");
-                    return $socket;
-                }
-                socket_close($socket);
-            }
-        }
-
-        // Fallback: try SOCK_DGRAM (datagram sockets)
-        if (function_exists('socket_create')) {
-            $socket = @socket_create(AF_UNIX, SOCK_DGRAM, 0);
-            
-            if ($socket !== false) {
-                if (@socket_connect($socket, $socketPath)) {
-                    $this->logger->info("Fallback to SOCK_DGRAM socket");
-                    return $socket;
-                }
-                socket_close($socket);
-            }
-        }
-
-        // Final fallback: try stream socket
-        $socket = @stream_socket_client('unix://' . $socketPath, $errno, $errstr, 30);
-        
-        if ($socket !== false) {
-            $this->logger->info("Fallback to stream socket");
-            return $socket;
-        }
-
-        $this->logger->error("All socket creation methods failed", [
-            'errno' => $errno ?? 'N/A',
-            'error' => $errstr ?? 'N/A'
-        ]);
-
-        return false;
-    }
-
-    /**
-     * Setup read stream for socket
-     * 
+     * @param string $data Raw data
      * @return void
      */
-    private function setupReadStream(): void
+    private function handleData(string $data): void
     {
-        $this->loop->addReadStream($this->socket, function ($socket) {
-            $this->handleRead($socket);
-        });
-    }
-
-    /**
-     * Handle read event on socket
-     * 
-     * @param resource $socket Socket resource
-     * @return void
-     */
-    private function handleRead($socket): void
-    {
-        try {
-            // Read data from socket
-            $data = $this->readFromSocket($socket);
-            
-            if ($data === false || $data === '') {
-                // Connection closed or error
-                if (feof($socket)) {
-                    $this->logger->warning("Socket connection closed by peer");
-                    $this->disconnect();
-                }
-                return;
-            }
-
-            $this->buffer .= $data;
-
-            // Try to extract complete JSON messages
-            $this->processBuffer();
-
-        } catch (\Exception $e) {
-            $this->logger->error("Error reading from socket", ['error' => $e->getMessage()]);
+        if ($data === '' || $data === false) {
+            return;
         }
-    }
 
-    /**
-     * Read data from socket (handles different socket types)
-     * 
-     * @param resource $socket Socket resource
-     * @return string|false Data read or false on error
-     */
-    private function readFromSocket($socket)
-    {
-        if (is_resource($socket) && get_resource_type($socket) === 'Socket') {
-            // PHP socket extension
-            $data = '';
-            $result = @socket_recv($socket, $data, 8192, 0);
-            return $result === false ? false : $data;
-        } else {
-            // Stream socket
-            return @fread($socket, 8192);
-        }
-    }
-
-    /**
-     * Write data to socket (handles different socket types)
-     * 
-     * @param resource $socket Socket resource
-     * @param string $data Data to write
-     * @return int|false Bytes written or false on error
-     */
-    private function writeToSocket($socket, string $data)
-    {
-        if (is_resource($socket) && get_resource_type($socket) === 'Socket') {
-            // PHP socket extension
-            return @socket_send($socket, $data, strlen($data), 0);
-        } else {
-            // Stream socket
-            return @fwrite($socket, $data);
-        }
+        $this->buffer .= $data;
+        $this->processBuffer();
     }
 
     /**
@@ -404,7 +282,7 @@ class UnixSocketTransport implements TransportInterface
             $json = json_encode($payload);
             $this->logger->debug("Sending request via UnixSocket", ['payload' => $json]);
             
-            $result = $this->writeToSocket($this->socket, $json);
+            $result = $this->socket->send($json);
             
             if ($result === false) {
                 unset($this->pendingRequests[$transaction]);
@@ -488,14 +366,7 @@ class UnixSocketTransport implements TransportInterface
     public function disconnect(): void
     {
         if ($this->socket) {
-            $this->loop->removeReadStream($this->socket);
-            
-            if (is_resource($this->socket) && get_resource_type($this->socket) === 'Socket') {
-                socket_close($this->socket);
-            } else {
-                fclose($this->socket);
-            }
-            
+            $this->socket->close();
             $this->socket = null;
         }
 
