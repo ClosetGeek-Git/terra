@@ -96,12 +96,12 @@ class SeqpacketSocketTest extends TestCase
      */
     public function testSeqpacketSocketCreation(): void
     {
-        if (!defined('SOCK_SEQPACKET')) {
-            $this->markTestSkipped('SOCK_SEQPACKET not available on this system');
+        if (!defined('STREAM_SOCK_SEQPACKET')) {
+            $this->markTestSkipped('STREAM_SOCK_SEQPACKET not available on this system');
         }
 
         // Create server socket
-        $this->serverSocket = $this->createTestServer(SOCK_SEQPACKET);
+        $this->serverSocket = $this->createTestServer(STREAM_SOCK_SEQPACKET);
         
         if ($this->serverSocket === false) {
             $this->markTestSkipped('Could not create SEQPACKET server socket');
