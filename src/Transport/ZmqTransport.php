@@ -18,7 +18,7 @@ use ZMQ;
  * 
  * Handles asynchronous communication with Janus Gateway over ZeroMQ
  */
-class ZmqTransport
+class ZmqTransport implements TransportInterface
 {
     /**
      * @var LoopInterface ReactPHP event loop
