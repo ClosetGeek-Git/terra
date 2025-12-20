@@ -7,7 +7,8 @@ use React\EventLoop\Factory as LoopFactory;
 use React\Promise\Promise;
 use Terra\Config\ConfigManager;
 use Terra\Logger\Logger;
-use Terra\Transport\ZmqTransport;
+use Terra\Transport\TransportInterface;
+use Terra\Transport\TransportFactory;
 
 /**
  * Base Admin Client for Janus Gateway
@@ -17,7 +18,7 @@ use Terra\Transport\ZmqTransport;
 class AdminClient
 {
     /**
-     * @var ZmqTransport Transport layer
+     * @var TransportInterface Transport layer
      */
     protected $transport;
 
@@ -52,7 +53,7 @@ class AdminClient
         $this->config = new ConfigManager($config);
         $this->logger = new Logger($this->config);
         $this->loop = $loop ?? LoopFactory::create();
-        $this->transport = new ZmqTransport($this->loop, $this->config, $this->logger);
+        $this->transport = TransportFactory::create($this->loop, $this->config, $this->logger);
     }
 
     /**
