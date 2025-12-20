@@ -3,7 +3,6 @@
 namespace Terra\Transport;
 
 use React\EventLoop\LoopInterface;
-use React\ZMQ\Context as ZMQContext;
 use React\Promise\Promise;
 use React\Promise\Deferred;
 use Terra\Config\ConfigManager;
@@ -18,7 +17,7 @@ use ZMQ;
  * 
  * Handles asynchronous communication with Janus Gateway over ZeroMQ
  */
-class ZmqTransport
+class ZmqTransport implements TransportInterface
 {
     /**
      * @var LoopInterface ReactPHP event loop
@@ -26,7 +25,7 @@ class ZmqTransport
     private $loop;
 
     /**
-     * @var ZMQContext ZMQ context
+     * @var object ZMQ context (supports multiple implementations)
      */
     private $context;
 
@@ -72,7 +71,7 @@ class ZmqTransport
         $this->loop = $loop;
         $this->config = $config;
         $this->logger = $logger;
-        $this->context = new ZMQContext($loop);
+        $this->context = ZmqFactory::createContext($loop, $config, $logger);
     }
 
     /**
