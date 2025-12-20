@@ -141,16 +141,16 @@ class UnixSocketTransportTest extends BaseIntegrationTest
     public function testSeqpacketSupport(): void
     {
         $hasSocketExtension = extension_loaded('sockets');
-        $hasSeqpacket = defined('SOCK_SEQPACKET');
+        $hasSeqpacket = defined('STREAM_SOCK_SEQPACKET');
         
         $this->recordResult('SOCK_SEQPACKET Support', 
             $hasSocketExtension || true, // Always pass, we have fallback
             $hasSocketExtension && $hasSeqpacket ? null : "Using fallback socket method");
         
         if (!$hasSocketExtension || !$hasSeqpacket) {
-            echo "\n⚠ SOCK_SEQPACKET not available, using fallback\n";
+            echo "\n⚠ STREAM_SOCK_SEQPACKET not available, using fallback\n";
             echo "  Socket extension: " . ($hasSocketExtension ? 'Loaded' : 'Not loaded') . "\n";
-            echo "  SOCK_SEQPACKET: " . ($hasSeqpacket ? 'Defined' : 'Not defined') . "\n\n";
+            echo "  STREAM_SOCK_SEQPACKET: " . ($hasSeqpacket ? 'Defined' : 'Not defined') . "\n\n";
         }
         
         $this->assertTrue(true); // Always pass, we have fallback mechanisms

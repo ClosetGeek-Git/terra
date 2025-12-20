@@ -13,7 +13,7 @@ use React\EventLoop\LoopInterface;
 class SeqpacketSocket
 {
     /**
-     * @var resource|object Socket resource (resource in PHP 7.x, Socket object in PHP 8.x)
+     * @var resource|object|null Socket resource (stream resource or Socket object)
      */
     private $socket;
 
@@ -89,7 +89,7 @@ class SeqpacketSocket
         }
 
         // Try SOCK_SEQPACKET first (native support)
-        if (defined('SOCK_SEQPACKET')) {
+        if (defined('STREAM_SOCK_SEQPACKET')) {
             $this->socket = $this->trySeqpacket($socketPath);
             if ($this->socket !== false) {
                 $this->socketType = self::TYPE_SEQPACKET;
@@ -99,7 +99,7 @@ class SeqpacketSocket
         }
 
         // Fallback to SOCK_DGRAM (similar semantics)
-        if (defined('SOCK_DGRAM')) {
+        if (defined('STREAM_SOCK_DGRAM')) {
             $this->socket = $this->tryDgram($socketPath);
             if ($this->socket !== false) {
                 $this->socketType = self::TYPE_DGRAM;
@@ -123,7 +123,7 @@ class SeqpacketSocket
      * Try to create SOCK_SEQPACKET socket
      * 
      * @param string $socketPath Socket path
-     * @return resource|object|false Socket resource/object or false
+     * @return resource|false Socket resource or false
      */
     private function trySeqpacket(string $socketPath)
     {
@@ -131,7 +131,7 @@ class SeqpacketSocket
             return false;
         }
 
-        $socket = @socket_create(AF_UNIX, SOCK_SEQPACKET, 0);
+        $socket = @socket_create(AF_UNIX, STREAM_SOCK_SEQPACKET, 0);
         if ($socket === false) {
             return false;
         }
@@ -144,6 +144,15 @@ class SeqpacketSocket
         if (@socket_connect($socket, $socketPath)) {
             // Set non-blocking mode
             @socket_set_nonblock($socket);
+            
+            // Export socket as stream resource for ReactPHP compatibility (PHP 8+)
+            if (function_exists('socket_export_stream') && is_object($socket)) {
+                $stream = @socket_export_stream($socket);
+                if ($stream !== false) {
+                    return $stream;
+                }
+            }
+            
             return $socket;
         }
 
@@ -155,7 +164,7 @@ class SeqpacketSocket
      * Try to create SOCK_DGRAM socket
      * 
      * @param string $socketPath Socket path
-     * @return resource|object|false Socket resource/object or false
+     * @return resource|false Socket resource or false
      */
     private function tryDgram(string $socketPath)
     {
@@ -163,7 +172,7 @@ class SeqpacketSocket
             return false;
         }
 
-        $socket = @socket_create(AF_UNIX, SOCK_DGRAM, 0);
+        $socket = @socket_create(AF_UNIX, STREAM_SOCK_DGRAM, 0);
         if ($socket === false) {
             return false;
         }
@@ -174,6 +183,15 @@ class SeqpacketSocket
 
         if (@socket_connect($socket, $socketPath)) {
             @socket_set_nonblock($socket);
+            
+            // Export socket as stream resource for ReactPHP compatibility (PHP 8+)
+            if (function_exists('socket_export_stream') && is_object($socket)) {
+                $stream = @socket_export_stream($socket);
+                if ($stream !== false) {
+                    return $stream;
+                }
+            }
+            
             return $socket;
         }
 
@@ -217,10 +235,11 @@ class SeqpacketSocket
             return false;
         }
 
-        if ($this->socketType === self::TYPE_STREAM) {
+        // Use stream functions for resources (exported streams or native streams)
+        // Use socket functions for Socket objects (PHP 8 when export not available)
+        if (is_resource($this->socket)) {
             return @fwrite($this->socket, $data);
         } else {
-            // Handle both PHP 7.x resource and PHP 8.x Socket object
             return @socket_send($this->socket, $data, strlen($data), 0);
         }
     }
@@ -237,7 +256,9 @@ class SeqpacketSocket
             return false;
         }
 
-        if ($this->socketType === self::TYPE_STREAM) {
+        // Use stream functions for resources (exported streams or native streams)
+        // Use socket functions for Socket objects (PHP 8 when export not available)
+        if (is_resource($this->socket)) {
             return @fread($this->socket, $length);
         } else {
             $data = '';
@@ -295,7 +316,8 @@ class SeqpacketSocket
         if ($this->socket) {
             $this->removeReadStream();
             
-            if ($this->socketType === self::TYPE_STREAM) {
+            // Use appropriate close function based on socket type
+            if (is_resource($this->socket)) {
                 @fclose($this->socket);
             } else {
                 @socket_close($this->socket);
@@ -309,7 +331,7 @@ class SeqpacketSocket
     /**
      * Get socket resource
      * 
-     * @return resource|object|null Socket resource (resource in PHP 7.x, Socket object in PHP 8.x)
+     * @return resource|object|null Socket resource (stream resource or Socket object)
      */
     public function getResource()
     {
@@ -348,9 +370,16 @@ class SeqpacketSocket
             'connected' => $this->connected,
         ];
 
-        if ($this->socket && $this->socketType !== self::TYPE_STREAM) {
-            @socket_getpeername($this->socket, $peer);
-            $info['peer'] = $peer ?? 'unknown';
+        if ($this->socket) {
+            if (is_resource($this->socket)) {
+                // Stream resource - use stream_socket_get_name
+                $peer = @stream_socket_get_name($this->socket, true);
+                $info['peer'] = $peer ?: 'unknown';
+            } else {
+                // Socket object - use socket_getpeername
+                @socket_getpeername($this->socket, $peer);
+                $info['peer'] = $peer ?? 'unknown';
+            }
         }
 
         return $info;
